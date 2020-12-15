@@ -1,29 +1,35 @@
 package main
 
 import (
-	"os"
-	"fmt"
 	"flag"
-	"strings"
+	"fmt"
 	"go/build"
+	"os"
+	"strings"
+
+	"golang.org/x/tools/go/packages"
 )
 
 var (
 	showStdLib = flag.Bool("show-std", false, "Show dependencies os Standard Library")
-	depLevel = flag.Int("level", -1, "Dept of Dependency Graph")
+	depLevel   = flag.Int("level", -1, "Dept of Dependency Graph")
 	ignorePkgs = flag.String("ignore", "", "Ignore packages in dependency graph")
 
-	ignoredPkgs = map[string]bool{}
-	pkgList = map[string]bool{}
-	graphList = map[string]bool{}
-	pkgDeps = make(map[string][]string)
+	ignoredPkgs  = map[string]bool{}
+	pkgList      = map[string]bool{}
+	graphList    = map[string]bool{}
+	pkgDeps      = make(map[string][]string)
 	buildContext = build.Default
 )
 
-func getImports(pkg *build.Package) []string{
+func getImports(pkg *packages.Package) []string {
 	allImports := pkg.Imports
 	// fmt.Println("All Imports", allImports)
-	return allImports
+	ret := make([]string)
+	for key, _ := range allImports {
+		append(ret, key)
+	}
+	return ret
 }
 
 func processEachPackage(dir string, pkgName string) error {
@@ -34,21 +40,32 @@ func processEachPackage(dir string, pkgName string) error {
 		return nil
 	}
 
-	pkg, err := buildContext.Import(pkgName, dir, 0)
+	// pkg, err := buildContext.Import(pkgName, dir, 0)
+	cfg := &packages.Config{
+		Mode:  packages.LoadAllSyntax,
+		Tests: false,
+		Dir:   dir,
+	}
+
+	initial, err := packages.Load(cfg, dir)
 	if err != nil {
 		return fmt.Errorf("Failed to import: %s", pkgName)
 	}
 
 	pkgList[pkgName] = true
 
-	if pkg.Goroot && !*showStdLib {
-		return nil
+	// if initial.Goroot && !*showStdLib {
+	//         return nil
+	// }
+	if packages.PrintErrors(initial) > 0 {
+		return fmt.Errorf("packages contain errors")
 	}
 
+	pkg := initial[0]
 	pkgImports := getImports(pkg)
 	pkgDeps[pkgName] = pkgImports
 
-	for _, subPack := range pkgImports  {
+	for _, subPack := range pkgImports {
 		if _, pkgExist := pkgList[subPack]; !pkgExist {
 			if err := processEachPackage(pkg.Dir, subPack); err != nil {
 				return err
@@ -78,7 +95,7 @@ func main() {
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Println("Failed to get current working directory")
-	} 
+	}
 
 	for _, pkgName := range args {
 		err := processEachPackage(cwd, pkgName)
