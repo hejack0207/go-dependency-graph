@@ -25,9 +25,9 @@ var (
 func getImports(pkg *packages.Package) []string {
 	allImports := pkg.Imports
 	// fmt.Println("All Imports", allImports)
-	ret := make([]string)
+	ret := []string{}
 	for key, _ := range allImports {
-		append(ret, key)
+		ret = append(ret, key)
 	}
 	return ret
 }
@@ -67,7 +67,7 @@ func processEachPackage(dir string, pkgName string) error {
 
 	for _, subPack := range pkgImports {
 		if _, pkgExist := pkgList[subPack]; !pkgExist {
-			if err := processEachPackage(pkg.Dir, subPack); err != nil {
+			if err := processEachPackage(pkg.PkgPath, subPack); err != nil {
 				return err
 			}
 		}
